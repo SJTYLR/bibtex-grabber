@@ -1,43 +1,30 @@
 /**
  * popup.js — BibTeX Grabber popup logic
- * Orchestrates: extraction → metadata display → tag/label UI → BibTeX generation → copy
+ * Orchestrates: extraction → metadata display → BibTeX generation → copy
  */
 
 'use strict';
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-let extractedData    = null;
-let selectedTags     = new Set();   // keywords  → keywords = {...}
-let suggestedTagList = [];
-let selectedLabels   = new Set();   // pp labels → note = {pp-labels: ...}
-let suggestedLabelList = [];        // pre-populated from stored labels
+let extractedData = null;
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
 
-const statusBar        = document.getElementById('status-bar');
-const statusText       = document.getElementById('status-text');
-const spinner          = document.getElementById('spinner');
-const errorSection     = document.getElementById('error-section');
-const errorDetail      = document.getElementById('error-detail');
-const metaSection      = document.getElementById('meta-section');
-const tagsSection      = document.getElementById('tags-section');
-const labelsSection    = document.getElementById('labels-section');
-const bibtexSection    = document.getElementById('bibtex-section');
-const actionsDiv       = document.getElementById('actions');
-const tagsContainer    = document.getElementById('tags-container');
-const labelsContainer  = document.getElementById('labels-container');
-const bibtexOutput     = document.getElementById('bibtex-output');
-const customTagInput   = document.getElementById('custom-tag-input');
-const addTagBtn        = document.getElementById('add-tag-btn');
-const customLabelInput = document.getElementById('custom-label-input');
-const addLabelBtn      = document.getElementById('add-label-btn');
-const btnCopy          = document.getElementById('btn-copy');
-const btnGenerate      = document.getElementById('btn-generate');
-const btnRefresh       = document.getElementById('btn-refresh');
-const divTags          = document.getElementById('div-tags');
-const divLabels        = document.getElementById('div-labels');
-const divBibtex        = document.getElementById('div-bibtex');
+const statusBar    = document.getElementById('status-bar');
+const statusText   = document.getElementById('status-text');
+const spinner      = document.getElementById('spinner');
+const errorSection = document.getElementById('error-section');
+const errorDetail  = document.getElementById('error-detail');
+const metaSection  = document.getElementById('meta-section');
+const bibtexSection = document.getElementById('bibtex-section');
+const actionsDiv   = document.getElementById('actions');
+const bibtexOutput = document.getElementById('bibtex-output');
+const btnCopy      = document.getElementById('btn-copy');
+const btnRefresh   = document.getElementById('btn-refresh');
+const divBibtex    = document.getElementById('div-bibtex');
+const venueLabel   = document.getElementById('venue-label');
+const publisherLabel = document.getElementById('publisher-label');
 
 // Metadata fields
 const fType      = document.getElementById('f-type');
@@ -45,6 +32,8 @@ const fKey       = document.getElementById('f-key');
 const fTitle     = document.getElementById('f-title');
 const fAuthors   = document.getElementById('f-authors');
 const fYear      = document.getElementById('f-year');
+const fMonth     = document.getElementById('f-month');
+const fDay       = document.getElementById('f-day');
 const fDoi       = document.getElementById('f-doi');
 const fVenue     = document.getElementById('f-venue');
 const fPublisher = document.getElementById('f-publisher');
@@ -54,22 +43,46 @@ const fPages     = document.getElementById('f-pages');
 const fUrl       = document.getElementById('f-url');
 const fAbstract  = document.getElementById('f-abstract');
 
-// ── Persisted labels ────────────────────────────────────────────────────────
-// We remember the user's previous Paperpile labels across popups so they
-// can quickly re-apply them without typing. Stored in chrome.storage.local.
+// ── Venue label + BibTeX field name per entry type ──────────────────────────
+//
+// Each entry maps to:
+//   venueLabel     — human-readable label shown in the UI
+//   venueBibField  — the BibTeX field name to emit (journaltitle, booktitle, …)
+//   publisherLabel — human-readable label for the publisher/org field
+//   pubBibField    — BibTeX field name for publisher row
+//
+const TYPE_VENUE_MAP = {
+  'article':           { venueLabel: 'Journal',                 venueBibField: 'journal',      publisherLabel: 'Publisher',      pubBibField: 'publisher' },
+  'inproceedings':     { venueLabel: 'Conference / Booktitle',  venueBibField: 'booktitle',    publisherLabel: 'Publisher',      pubBibField: 'publisher' },
+  'proceedings':       { venueLabel: 'Conference / Booktitle',  venueBibField: 'booktitle',    publisherLabel: 'Publisher',      pubBibField: 'publisher' },
+  'book':              { venueLabel: 'Series',                  venueBibField: 'series',       publisherLabel: 'Publisher',      pubBibField: 'publisher' },
+  'incollection':      { venueLabel: 'Book Title',              venueBibField: 'booktitle',    publisherLabel: 'Publisher',      pubBibField: 'publisher' },
+  'phdthesis':         { venueLabel: 'Institution / School',    venueBibField: 'school',       publisherLabel: 'Address',        pubBibField: 'address'   },
+  'mastersthesis':     { venueLabel: 'Institution / School',    venueBibField: 'school',       publisherLabel: 'Address',        pubBibField: 'address'   },
+  'techreport':        { venueLabel: 'Institution',             venueBibField: 'institution',  publisherLabel: 'Report Number',  pubBibField: 'number'    },
+  'report':            { venueLabel: 'Institution',             venueBibField: 'institution',  publisherLabel: 'Report Number',  pubBibField: 'number'    },
+  'online':            { venueLabel: 'Website',                 venueBibField: 'organization', publisherLabel: 'Publisher / Org',pubBibField: 'publisher' },
+  'misc':              { venueLabel: 'How Published',           venueBibField: 'howpublished', publisherLabel: 'Publisher',      pubBibField: 'publisher' },
+  'software':          { venueLabel: 'Repository / Platform',   venueBibField: 'organization', publisherLabel: 'Publisher / Org',pubBibField: 'publisher' },
+  'dataset':           { venueLabel: 'Repository / Platform',   venueBibField: 'organization', publisherLabel: 'Publisher / Org',pubBibField: 'publisher' },
+  'video':             { venueLabel: 'Channel / Platform',      venueBibField: 'organization', publisherLabel: 'Publisher / Org',pubBibField: 'publisher' },
+  'article-newspaper': { venueLabel: 'Newspaper',               venueBibField: 'journaltitle', publisherLabel: 'Publisher',      pubBibField: 'publisher' },
+  'article-magazine':  { venueLabel: 'Magazine',                venueBibField: 'journaltitle', publisherLabel: 'Publisher',      pubBibField: 'publisher' },
+  'article-blog':      { venueLabel: 'Blog / Website',          venueBibField: 'journaltitle', publisherLabel: 'Publisher / Org',pubBibField: 'publisher' },
+  'patent':            { venueLabel: 'Patent Office',           venueBibField: 'organization', publisherLabel: 'Holder',         pubBibField: 'holder'    },
+  'standard':          { venueLabel: 'Standards Body',          venueBibField: 'organization', publisherLabel: 'Number',         pubBibField: 'number'    },
+  'manual':            { venueLabel: 'Organisation',            venueBibField: 'organization', publisherLabel: 'Address',        pubBibField: 'address'   },
+  'unpublished':       { venueLabel: 'Note / Venue',            venueBibField: 'note',         publisherLabel: 'Address',        pubBibField: 'address'   },
+};
 
-const STORAGE_KEY_LABELS = 'pp_saved_labels';
-
-async function loadSavedLabels() {
-  return new Promise(resolve => {
-    chrome.storage.local.get(STORAGE_KEY_LABELS, result => {
-      resolve(result[STORAGE_KEY_LABELS] || []);
-    });
-  });
+function getTypeConfig(type) {
+  return TYPE_VENUE_MAP[type] || TYPE_VENUE_MAP['article'];
 }
 
-function saveLabels(labels) {
-  chrome.storage.local.set({ [STORAGE_KEY_LABELS]: [...labels] });
+function updateVenueLabels() {
+  const cfg = getTypeConfig(fType.value);
+  venueLabel.textContent   = cfg.venueLabel;
+  publisherLabel.textContent = cfg.publisherLabel;
 }
 
 // ── Utility ─────────────────────────────────────────────────────────────────
@@ -84,11 +97,7 @@ function showError(msg, detail = '') {
   errorSection.style.display = 'block';
   errorDetail.textContent = detail;
   metaSection.style.display = 'none';
-  tagsSection.style.display = 'none';
-  labelsSection.style.display = 'none';
   bibtexSection.style.display = 'none';
-  divTags.style.display = 'none';
-  divLabels.style.display = 'none';
   divBibtex.style.display = 'none';
 }
 
@@ -96,11 +105,7 @@ function showUI() {
   statusBar.style.display = 'flex';
   errorSection.style.display = 'none';
   metaSection.style.display = 'block';
-  tagsSection.style.display = 'block';
-  labelsSection.style.display = 'block';
   bibtexSection.style.display = 'block';
-  divTags.style.display = 'block';
-  divLabels.style.display = 'block';
   divBibtex.style.display = 'block';
   actionsDiv.style.display = 'flex';
 }
@@ -115,11 +120,20 @@ function escapeHtml(str) {
 // ── BibTeX generation ───────────────────────────────────────────────────────
 
 function buildBibtex() {
-  const type      = fType.value.trim() || 'misc';
-  const key       = fKey.value.trim() || 'unknown2024';
-  const title     = fTitle.value.trim();
-  const authors   = fAuthors.value.trim();
+  const type   = fType.value.trim() || 'misc';
+  const key    = fKey.value.trim()  || 'unknown2024';
+  const title  = fTitle.value.trim();
+
+  // Authors: UI uses ";" separator → BibTeX uses " and "
+  const authors = fAuthors.value.trim()
+    .split(/\s*;\s*/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .join(' and ');
+
   const year      = fYear.value.trim();
+  const month     = fMonth.value.trim();
+  const day       = fDay.value.trim();
   const doi       = fDoi.value.trim();
   const venue     = fVenue.value.trim();
   const publisher = fPublisher.value.trim();
@@ -129,32 +143,32 @@ function buildBibtex() {
   const url       = fUrl.value.trim();
   const abstract  = fAbstract.value.trim();
 
-  const keywords  = [...selectedTags].join(', ');
-  const ppLabels  = [...selectedLabels].join(', ');
-
-  const isConf   = ['inproceedings', 'proceedings'].includes(type);
-  const isBook   = ['book', 'incollection'].includes(type);
-  const isThesis = ['phdthesis', 'mastersthesis'].includes(type);
+  const cfg = getTypeConfig(type);
 
   const fields = [];
   const add = (name, val) => { if (val) fields.push([name, val]); };
 
-  add('title',  title  ? `{${title}}` : '');
+  add('title',  title ? `{${title}}` : '');
   add('author', authors);
   add('year',   year);
+  add('month',  month);
+  add('day',    day);
 
-  if (isConf) {
-    add('booktitle', venue);
-  } else if (isBook) {
-    add('publisher', publisher || venue);
-  } else if (isThesis) {
-    add('school', publisher || venue);
-  } else {
-    add('journal',   venue);
-    add('volume',    volume);
-    add('number',    number);
-    add('pages',     pages);
-    add('publisher', publisher);
+  // Venue field — name depends on type
+  add(cfg.venueBibField, venue);
+
+  // Volume / number / pages — only for types that use them
+  const usesVolumePages = ['article', 'inproceedings', 'proceedings', 'incollection',
+    'article-newspaper', 'article-magazine', 'article-blog'].includes(type);
+  if (usesVolumePages) {
+    add('volume', volume);
+    add('number', number);
+    add('pages',  pages);
+  }
+
+  // Publisher / org field — name depends on type
+  if (cfg.pubBibField !== cfg.venueBibField) {
+    add(cfg.pubBibField, publisher);
   }
 
   // arXiv extras
@@ -163,15 +177,17 @@ function buildBibtex() {
     add('eprint',        extractedData.eprint || '');
   }
 
-  add('doi',      doi);
-  add('url',      url);
-  add('abstract', abstract ? `{${abstract}}` : '');
-  add('keywords', keywords);
+  add('doi',    doi);
+  add('url',    url);
 
-  // Paperpile labels — stored in `note` with a parseable prefix
-  if (ppLabels) {
-    add('note', `{pp-labels: ${ppLabels}}`);
+  // Access date for web/online sources
+  const isWebType = ['online', 'software', 'dataset', 'video', 'article-blog',
+    'article-newspaper', 'article-magazine'].includes(type);
+  if (isWebType && url) {
+    add('urldate', new Date().toISOString().slice(0, 10));
   }
+
+  add('abstract', abstract ? `{${abstract}}` : '');
 
   // Build string
   const lines = [`@${type}{${key},`];
@@ -190,19 +206,17 @@ function highlightBibtex(raw) {
   return raw
     .split('\n')
     .map(line => {
-      if (/^@\w+\{/.test(line)) {
+      if (/^@[\w-]+\{/.test(line)) {
         return line.replace(
-          /^(@\w+)\{([^,]+)(,?)$/,
+          /^(@[\w-]+)\{([^,]+)(,?)$/,
           (_, t, k, c) =>
             `<span class="bib-type">${t}</span>{<span class="bib-key">${escapeHtml(k)}</span>${c}`
         );
       }
-      const fieldMatch = line.match(/^(\s*)(\w+)(\s*=\s*)(.*)(,?)$/);
+      const fieldMatch = line.match(/^(\s*)([\w-]+)(\s*=\s*)(.*)(,?)$/);
       if (fieldMatch) {
         const [, indent, name, eq, val, comma] = fieldMatch;
-        // Special colour for the note/pp-labels line
-        const valClass = name === 'note' ? 'bib-label-val' : 'bib-value';
-        return `${indent}<span class="bib-field">${name}</span>${escapeHtml(eq)}<span class="${valClass}">${escapeHtml(val)}</span>${comma}`;
+        return `${indent}<span class="bib-field">${name}</span>${escapeHtml(eq)}<span class="bib-value">${escapeHtml(val)}</span>${comma}`;
       }
       return escapeHtml(line);
     })
@@ -220,122 +234,26 @@ function fillForm(data) {
   fType.value      = data.entry_type || 'misc';
   fKey.value       = data.cite_key   || '';
   fTitle.value     = data.title      || '';
-  fAuthors.value   = data.authors    || '';
-  fYear.value      = data.year       || '';
-  fDoi.value       = data.doi        || '';
-  fVenue.value     = data.journal || data.conference || '';
-  fPublisher.value = data.publisher  || '';
-  fVolume.value    = data.volume     || '';
-  fNumber.value    = data.issue      || '';
-  fPages.value     = data.pages      || '';
-  fUrl.value       = data.url        || data.page_url || '';
-  fAbstract.value  = data.abstract   || '';
-}
+  // Convert "and"-separated authors from content.js to ";" for the UI
+  fAuthors.value   = (data.authors || '')
+    .split(/\s+and\s+/i)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .join('; ');
+  fYear.value      = data.year      || '';
+  fMonth.value     = data.month     || '';
+  fDay.value       = data.day       || '';
+  fDoi.value       = data.doi       || '';
+  // Venue: use journal, conference, or site_name depending on what was found
+  fVenue.value     = data.journal || data.conference || data.site_name || '';
+  fPublisher.value = data.publisher || data.organization || '';
+  fVolume.value    = data.volume    || '';
+  fNumber.value    = data.issue     || '';
+  fPages.value     = data.pages     || '';
+  fUrl.value       = data.url       || data.page_url || '';
+  fAbstract.value  = data.abstract  || '';
 
-// ── Keyword pill rendering ──────────────────────────────────────────────────
-
-function renderTags() {
-  tagsContainer.innerHTML = '';
-  const allTags = new Set([...suggestedTagList, ...selectedTags]);
-
-  for (const tag of allTags) {
-    const el = document.createElement('button');
-    const isSelected = selectedTags.has(tag);
-    el.className = 'pill ' + (isSelected ? 'kw-selected' : 'kw-suggested');
-    el.textContent = tag;
-    el.title = isSelected ? 'Click to deselect' : 'Click to add to keywords';
-    el.addEventListener('click', () => {
-      if (selectedTags.has(tag)) {
-        selectedTags.delete(tag);
-      } else {
-        selectedTags.add(tag);
-      }
-      renderTags();
-      renderBibtex();
-    });
-    tagsContainer.appendChild(el);
-  }
-
-  if (allTags.size === 0) {
-    tagsContainer.innerHTML =
-      '<span style="color:var(--text-muted);font-size:12px">No keywords suggested — add below</span>';
-  }
-}
-
-function computeTagSuggestions(data) {
-  const searchText = [
-    data.title, data.abstract, data.keywords, data.journal, data.conference,
-  ].filter(Boolean).join(' ');
-
-  suggestedTagList = suggestTags(searchText);
-  for (const t of suggestedTagList) selectedTags.add(t);
-}
-
-// ── Label pill rendering ────────────────────────────────────────────────────
-
-function renderLabels() {
-  labelsContainer.innerHTML = '';
-  // Show all saved labels as suggestions; selected ones highlighted purple
-  const allLabels = new Set([...suggestedLabelList, ...selectedLabels]);
-
-  for (const label of allLabels) {
-    const el = document.createElement('button');
-    const isSelected = selectedLabels.has(label);
-    el.className = 'pill ' + (isSelected ? 'lbl-selected' : 'lbl-suggested');
-    el.textContent = label;
-    el.title = isSelected ? 'Click to remove label' : 'Click to add label';
-    el.addEventListener('click', () => {
-      if (selectedLabels.has(label)) {
-        selectedLabels.delete(label);
-      } else {
-        selectedLabels.add(label);
-      }
-      renderLabels();
-      renderBibtex();
-      // Persist the full known label set whenever it changes
-      saveLabels(new Set([...suggestedLabelList, ...selectedLabels]));
-    });
-    labelsContainer.appendChild(el);
-  }
-
-  if (allLabels.size === 0) {
-    labelsContainer.innerHTML =
-      '<span style="color:var(--text-muted);font-size:12px">No saved labels — add your Paperpile labels below</span>';
-  }
-}
-
-// ── Add custom keyword ──────────────────────────────────────────────────────
-
-function addCustomTag() {
-  const raw = customTagInput.value.trim();
-  if (!raw) return;
-  const tag = raw.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-  if (tag) {
-    selectedTags.add(tag);
-    if (!suggestedTagList.includes(tag)) suggestedTagList.push(tag);
-    renderTags();
-    renderBibtex();
-  }
-  customTagInput.value = '';
-  customTagInput.focus();
-}
-
-// ── Add custom label ────────────────────────────────────────────────────────
-
-function addCustomLabel() {
-  const raw = customLabelInput.value.trim();
-  if (!raw) return;
-  // Labels can have spaces and mixed case — preserve them, just sanitise slightly
-  const label = raw.replace(/[{},]/g, '').trim();
-  if (label) {
-    selectedLabels.add(label);
-    if (!suggestedLabelList.includes(label)) suggestedLabelList.push(label);
-    renderLabels();
-    renderBibtex();
-    saveLabels(new Set([...suggestedLabelList, ...selectedLabels]));
-  }
-  customLabelInput.value = '';
-  customLabelInput.focus();
+  updateVenueLabels();
 }
 
 // ── Extraction ──────────────────────────────────────────────────────────────
@@ -351,18 +269,6 @@ async function extract() {
     showError('Cannot access the current tab.', e.message);
     return;
   }
-
-  // Inject content script if not already present
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js'],
-    });
-  } catch (e) { /* already injected or restricted */ }
-
-  // Load saved labels before rendering
-  const savedLabels = await loadSavedLabels();
-  suggestedLabelList = [...new Set(savedLabels)];
 
   try {
     const response = await new Promise((resolve, reject) => {
@@ -380,35 +286,21 @@ async function extract() {
     }
 
     extractedData = response.data;
-    selectedTags = new Set();
-    suggestedTagList = [];
-    selectedLabels = new Set();
-
     fillForm(extractedData);
-    computeTagSuggestions(extractedData);
-    renderTags();
-    renderLabels();
     renderBibtex();
     showUI();
-    setStatus(`Extracted from: ${(tab.url || '').slice(0, 50)}…`, false);
+    setStatus(`Extracted from: ${(tab.url || '').slice(0, 55)}…`, false);
 
   } catch (e) {
-    // Fallback: tab info only
+    // Fallback: use tab title + URL
     extractedData = {
       title:      tab.title || '',
       url:        tab.url   || '',
       page_url:   tab.url   || '',
-      entry_type: 'misc',
+      entry_type: 'online',
       cite_key:   'unknown' + new Date().getFullYear(),
     };
-    selectedTags = new Set();
-    suggestedTagList = [];
-    selectedLabels = new Set();
-
     fillForm(extractedData);
-    computeTagSuggestions(extractedData);
-    renderTags();
-    renderLabels();
     renderBibtex();
     showUI();
     setStatus('Limited extraction — fill in fields manually', false);
@@ -441,7 +333,12 @@ async function copyBibtex() {
 
 // ── Live re-render on field edits ──────────────────────────────────────────
 
-[fType, fKey, fTitle, fAuthors, fYear, fDoi, fVenue, fPublisher,
+fType.addEventListener('change', () => {
+  updateVenueLabels();
+  renderBibtex();
+});
+
+[fKey, fTitle, fAuthors, fYear, fMonth, fDay, fDoi, fVenue, fPublisher,
  fVolume, fNumber, fPages, fUrl, fAbstract].forEach(el => {
   el.addEventListener('input', () => renderBibtex());
 });
@@ -449,18 +346,7 @@ async function copyBibtex() {
 // ── Event listeners ─────────────────────────────────────────────────────────
 
 btnCopy.addEventListener('click', copyBibtex);
-btnGenerate.addEventListener('click', renderBibtex);
 btnRefresh.addEventListener('click', extract);
-
-addTagBtn.addEventListener('click', addCustomTag);
-customTagInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') addCustomTag();
-});
-
-addLabelBtn.addEventListener('click', addCustomLabel);
-customLabelInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') addCustomLabel();
-});
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 

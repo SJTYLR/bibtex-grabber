@@ -11,10 +11,6 @@
       --surface2: #0f3460;
       --accent: #e94560;
       --accent2: #533483;
-      --label-color: #7c4dff;
-      --label-bg: #2d1f5e;
-      --label-border: #4a2fa0;
-      --label-selected: #7c4dff;
       --text: #e0e0e0;
       --text-muted: #8892a4;
       --success: #4caf50;
@@ -106,24 +102,6 @@
       align-items: center;
       gap: 6px;
     }
-    .section-title .section-badge {
-      font-size: 10px;
-      font-weight: 600;
-      padding: 1px 6px;
-      border-radius: 10px;
-      text-transform: none;
-      letter-spacing: 0;
-    }
-    .badge-keyword {
-      background: var(--tag-bg);
-      color: #a8c4e0;
-      border: 1px solid #2d4a6e;
-    }
-    .badge-label {
-      background: var(--label-bg);
-      color: #b39dff;
-      border: 1px solid var(--label-border);
-    }
     .section-title::after {
       content: '';
       flex: 1;
@@ -170,106 +148,7 @@
       max-height: 100px;
     }
     .field select option { background: var(--surface2); }
-
-    /* ── Shared tag/label pill styles ── */
-    .pills-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-      margin-top: 6px;
-      min-height: 28px;
-    }
-
-    .pill {
-      padding: 3px 9px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      border: 1px solid transparent;
-      transition: all 0.15s;
-      user-select: none;
-    }
-
-    /* Keyword pills (blue tones) */
-    .pill.kw-suggested {
-      background: var(--tag-bg);
-      color: #a8c4e0;
-      border-color: #2d4a6e;
-    }
-    .pill.kw-suggested:hover { background: var(--tag-hover); }
-    .pill.kw-selected {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-    }
-    .pill.kw-selected:hover { opacity: 0.85; }
-
-    /* Label pills (purple tones) */
-    .pill.lbl-suggested {
-      background: var(--label-bg);
-      color: #b39dff;
-      border-color: var(--label-border);
-    }
-    .pill.lbl-suggested:hover { background: #3d2a80; }
-    .pill.lbl-selected {
-      background: var(--label-color);
-      color: #fff;
-      border-color: var(--label-color);
-    }
-    .pill.lbl-selected:hover { opacity: 0.85; }
-
-    .pill-input-row {
-      display: flex;
-      gap: 6px;
-      margin-top: 8px;
-    }
-    .pill-input-row input {
-      flex: 1;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-size: 12px;
-      padding: 4px 8px;
-      outline: none;
-    }
-    .pill-input-row input:focus { border-color: var(--accent); }
-    .pill-input-row input::placeholder { color: var(--text-muted); }
-    .pill-input-row input.label-input:focus { border-color: var(--label-color); }
-
-    .btn-small {
-      padding: 4px 10px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--surface2);
-      color: var(--text);
-      font-size: 11px;
-      cursor: pointer;
-      transition: background 0.15s;
-      white-space: nowrap;
-    }
-    .btn-small:hover { background: var(--accent); border-color: var(--accent); }
-    .btn-small.label-btn:hover { background: var(--label-color); border-color: var(--label-color); }
-
-    /* ── Tags section ── */
-    #tags-section {
-      padding: 8px 14px;
-      display: none;
-    }
-
-    /* ── Labels section ── */
-    #labels-section {
-      padding: 8px 14px;
-      display: none;
-    }
-
-    .label-note {
-      font-size: 10px;
-      color: var(--text-muted);
-      margin-top: 5px;
-      font-style: italic;
-    }
+    .field select optgroup { color: var(--text-muted); font-style: normal; }
 
     /* ── BibTeX output ── */
     #bibtex-section {
@@ -298,7 +177,6 @@
     .bib-key     { color: #79c0ff; }
     .bib-field   { color: #d2a8ff; }
     .bib-value   { color: #a5d6ff; }
-    .bib-label-val { color: #c9a7ff; }
 
     /* ── Action buttons ── */
     #actions {
@@ -370,7 +248,7 @@
     <div class="header-icon">📄</div>
     <div>
       <h1>BibTeX Grabber</h1>
-      <div class="subtitle">Extract → Tag → Copy</div>
+      <div class="subtitle">Extract → Edit → Copy</div>
     </div>
   </div>
 
@@ -390,48 +268,86 @@
   <div id="meta-section">
     <div class="section-title">Metadata</div>
     <div class="field-grid">
+
       <div class="field">
         <label>Entry Type</label>
         <select id="f-type">
-          <option value="article">article</option>
-          <option value="inproceedings">inproceedings</option>
-          <option value="book">book</option>
-          <option value="incollection">incollection</option>
-          <option value="phdthesis">phdthesis</option>
-          <option value="mastersthesis">mastersthesis</option>
-          <option value="techreport">techreport</option>
-          <option value="misc">misc</option>
-          <option value="unpublished">unpublished</option>
+          <optgroup label="── Academic ──">
+            <option value="article">article — journal paper</option>
+            <option value="inproceedings">inproceedings — conference paper</option>
+            <option value="proceedings">proceedings — conference volume</option>
+            <option value="book">book</option>
+            <option value="incollection">incollection — book chapter</option>
+            <option value="phdthesis">phdthesis</option>
+            <option value="mastersthesis">mastersthesis</option>
+            <option value="techreport">techreport</option>
+            <option value="unpublished">unpublished</option>
+          </optgroup>
+          <optgroup label="── Web / Digital ──">
+            <option value="online">online — website / webpage</option>
+            <option value="misc">misc — preprint / arXiv / other</option>
+            <option value="software">software — code / app</option>
+            <option value="dataset">dataset</option>
+            <option value="video">video</option>
+          </optgroup>
+          <optgroup label="── News / Media ──">
+            <option value="article-newspaper">article-newspaper</option>
+            <option value="article-magazine">article-magazine</option>
+            <option value="article-blog">article-blog</option>
+          </optgroup>
+          <optgroup label="── Other ──">
+            <option value="report">report</option>
+            <option value="patent">patent</option>
+            <option value="standard">standard</option>
+            <option value="manual">manual</option>
+          </optgroup>
         </select>
       </div>
+
       <div class="field">
         <label>Cite Key</label>
         <input type="text" id="f-key" placeholder="author2024title">
       </div>
+
       <div class="field full">
         <label>Title</label>
-        <input type="text" id="f-title" placeholder="Paper title">
+        <input type="text" id="f-title" placeholder="Title of work">
       </div>
+
       <div class="field full">
-        <label>Author(s) — separate with " and "</label>
-        <input type="text" id="f-authors" placeholder="Smith, John and Doe, Jane">
+        <label>Author(s) — separate with ";"</label>
+        <input type="text" id="f-authors" placeholder="Smith, John; Doe, Jane">
       </div>
+
       <div class="field">
         <label>Year</label>
         <input type="text" id="f-year" placeholder="2024" maxlength="4">
       </div>
       <div class="field">
+        <label>Month</label>
+        <input type="text" id="f-month" placeholder="jan">
+      </div>
+      <div class="field">
+        <label>Day</label>
+        <input type="text" id="f-day" placeholder="15" maxlength="2">
+      </div>
+
+      <div class="field">
         <label>DOI</label>
         <input type="text" id="f-doi" placeholder="10.xxxx/xxxxx">
       </div>
-      <div class="field">
-        <label>Journal / Booktitle</label>
-        <input type="text" id="f-venue" placeholder="Journal or conference name">
+
+      <!-- Venue: label + field name change dynamically via JS -->
+      <div class="field full">
+        <label id="venue-label">Journal / Booktitle</label>
+        <input type="text" id="f-venue" placeholder="Journal or venue name">
       </div>
+
       <div class="field">
-        <label>Publisher</label>
-        <input type="text" id="f-publisher" placeholder="Publisher">
+        <label id="publisher-label">Publisher</label>
+        <input type="text" id="f-publisher" placeholder="Publisher or organisation">
       </div>
+
       <div class="field">
         <label>Volume</label>
         <input type="text" id="f-volume" placeholder="12">
@@ -444,49 +360,17 @@
         <label>Pages</label>
         <input type="text" id="f-pages" placeholder="100--120">
       </div>
+
       <div class="field">
         <label>URL</label>
         <input type="text" id="f-url" placeholder="https://…">
       </div>
+
       <div class="field full">
-        <label>Abstract</label>
-        <textarea id="f-abstract" placeholder="Optional abstract…"></textarea>
+        <label>Abstract / Description</label>
+        <textarea id="f-abstract" placeholder="Optional abstract or description…"></textarea>
       </div>
-    </div>
-  </div>
 
-  <div class="divider" id="div-tags" style="display:none"></div>
-
-  <!-- Keywords / Tags section -->
-  <div id="tags-section">
-    <div class="section-title">
-      Keywords
-      <span class="section-badge badge-keyword">→ keywords field</span>
-    </div>
-    <div class="pills-container" id="tags-container"></div>
-    <div class="pill-input-row">
-      <input type="text" id="custom-tag-input" placeholder="Add keyword…">
-      <button class="btn-small" id="add-tag-btn">+ Add</button>
-    </div>
-  </div>
-
-  <div class="divider" id="div-labels" style="display:none"></div>
-
-  <!-- Paperpile Labels section -->
-  <div id="labels-section">
-    <div class="section-title">
-      Paperpile Labels
-      <span class="section-badge badge-label">→ note field</span>
-    </div>
-    <div class="pills-container" id="labels-container"></div>
-    <div class="pill-input-row">
-      <input type="text" id="custom-label-input" class="label-input" placeholder="Add label…">
-      <button class="btn-small label-btn" id="add-label-btn">+ Add</button>
-    </div>
-    <div class="label-note">
-      ⓘ Paperpile has no BibTeX label import field. Labels are stored as
-      <code style="color:#b39dff">note = {pp-labels: …}</code> so you can
-      batch-assign them after import using a script or search.
     </div>
   </div>
 
@@ -501,7 +385,6 @@
   <!-- Actions -->
   <div id="actions" style="display:flex">
     <button class="btn btn-secondary" id="btn-refresh" title="Re-extract from page">↺ Re-extract</button>
-    <button class="btn btn-secondary" id="btn-generate" title="Regenerate BibTeX">⚙ Generate</button>
     <button class="btn btn-primary" id="btn-copy">📋 Copy BibTeX</button>
   </div>
 
